@@ -1,3 +1,6 @@
+#include "tengwar/executor.h"
+#include "tengwar/lexer.h"
+#include "tengwar/parser.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,21 +20,21 @@ int main(void) {
             break;
         }
 
-        if (strcmp(line, "ls\n") == 0) {
-            pid_t pid = fork();
+        Token tokens[128];
+        size_t token_count = lexer_tokenize(line, tokens, 128);
 
-            if (pid == 0) {
-                execlp("ls", "ls", NULL);
-                perror("ls");
-                exit(1);
-            }
+        Parser parser = {
+            .p_current = tokens,
+        };
 
-            waitpid(pid, NULL, 0);
-        }
+        List list;
 
-        if (strcmp(line, "exit\n") == 0) {
-            break;
-        }
+        parse_list(&parser, &list);
+
+        execute_list(&list);
+
+        list_free(&list);
+        lexer_free_tokens(tokens, token_count);
     }
     free(line);
 

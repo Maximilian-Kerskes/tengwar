@@ -12,6 +12,7 @@ set(CMAKE_C_EXTENSIONS ON)
 add_library(tengwar_core
     src/lexer.c
     src/parser.c
+    src/executor.c
 )
 
 target_include_directories(tengwar_core PUBLIC
