@@ -1,17 +1,9 @@
 #include "tengwar/executor.h"
+#include "tengwar/builtins/builtins.h"
 #include "tengwar/parser.h"
 #include <stdio.h>
 #include <sys/wait.h>
 #include <unistd.h>
-
-static int is_builtin(const Command *command) {
-    // mock return value
-    return 0;
-}
-
-static void execute_internal_command(const Command *command) {
-    // noop
-}
 
 static void execute_external_command(const Command *command) {
     execvp(command->argv[0], command->argv);
@@ -21,8 +13,8 @@ static void execute_external_command(const Command *command) {
 }
 
 static void execute_command(const Command *command) {
-    if (is_builtin(command)) {
-        execute_internal_command(command);
+    if (builtin_is_builtin(command->argv[0])) {
+        builtin_execute(command);
     } else {
         execute_external_command(command);
     }
@@ -33,6 +25,11 @@ static void execute_pipeline(const Pipeline *pipeline) {
     pid_t pids[pipeline->command_count];
 
     Command *command = pipeline->commands;
+
+    if (pipeline->command_count == 1 && builtin_is_builtin(command->argv[0])) {
+        builtin_execute(command);
+        return;
+    }
 
     while (command < pipeline->commands + pipeline->command_count) {
         int fd[2];

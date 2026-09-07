@@ -13,6 +13,8 @@ add_library(tengwar_core
     src/lexer.c
     src/parser.c
     src/executor.c
+	src/builtins/builtins.c
+	src/builtins/cd.c
 )
 
 target_include_directories(tengwar_core PUBLIC
