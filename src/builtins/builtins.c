@@ -2,14 +2,10 @@
 #include "builtins_internal.h"
 #include <string.h>
 
-static int builtin_noop(const Command *command) {
-    // noop
-    return 0;
-}
-
 static const Builtin builtins[] = {
-    {"noop", builtin_noop},
-    {"cd", builtin_cd},
+    {"cd", builtin_cd},       {"exit", builtin_exit},   {"export", builtin_export},
+    {"unset", builtin_unset}, {"pwd", builtin_pwd},     {"echo", builtin_echo},
+    {"true", builtin_true},   {"false", builtin_false},
 };
 
 static const Builtin *find_builtin(const char *name) {

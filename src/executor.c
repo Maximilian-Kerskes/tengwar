@@ -12,7 +12,7 @@ static void execute_external_command(const Command *command) {
     _exit(127);
 }
 
-static void execute_command(const Command *command) {
+static void execute_child_command(const Command *command) {
     if (builtin_is_builtin(command->argv[0])) {
         builtin_execute(command);
     } else {
@@ -65,7 +65,7 @@ static void execute_pipeline(const Pipeline *pipeline) {
                 close(fd[1]);
             }
 
-            execute_command(command);
+            execute_child_command(command);
             _exit(127);
         }
 
