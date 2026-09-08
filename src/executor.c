@@ -1,9 +1,71 @@
 #include "tengwar/executor.h"
 #include "tengwar/builtins/builtins.h"
 #include "tengwar/parser.h"
+#include <fcntl.h>
 #include <stdio.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+static int apply_redirections(const Command *command) {
+    for (size_t i = 0; i < command->redirect_count; i++) {
+        const Redirect *redirect = &command->redirects[i];
+
+        int fd;
+
+        switch (redirect->type) {
+        case REDIRECT_IN:
+            fd = open(redirect->filename, O_RDONLY);
+            break;
+        case REDIRECT_OUT:
+            fd = open(redirect->filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            break;
+        case REDIRECT_APPEND:
+            fd = open(redirect->filename, O_WRONLY | O_CREAT | O_APPEND, 0644);
+            break;
+        }
+
+        if (fd == -1) {
+            perror(redirect->filename);
+            return -1;
+        }
+
+        int target = redirect->type == REDIRECT_IN ? STDIN_FILENO : STDOUT_FILENO;
+
+        if (dup2(fd, target) == -1) {
+            perror("dup2");
+            close(fd);
+            return -1;
+        }
+        close(fd);
+    }
+    return 0;
+}
+
+static int execute_parent_builtin(const Command *command) {
+    int saved_stdin = dup(STDIN_FILENO);
+    int saved_stdout = dup(STDOUT_FILENO);
+
+    if (apply_redirections(command) == -1) {
+        perror("apply_redirections");
+        dup2(saved_stdin, STDIN_FILENO);
+        dup2(saved_stdout, STDOUT_FILENO);
+
+        close(saved_stdin);
+        close(saved_stdout);
+        return -1;
+    }
+
+    int status = builtin_execute(command);
+    dup2(saved_stdin, STDIN_FILENO);
+    dup2(saved_stdout, STDOUT_FILENO);
+
+    close(saved_stdin);
+    close(saved_stdout);
+
+    return status;
+}
+
+static int execute_child_builtin(const Command *command) { return builtin_execute(command); }
 
 static void execute_external_command(const Command *command) {
     execvp(command->argv[0], command->argv);
@@ -14,7 +76,7 @@ static void execute_external_command(const Command *command) {
 
 static void execute_child_command(const Command *command) {
     if (builtin_is_builtin(command->argv[0])) {
-        builtin_execute(command);
+        _exit(execute_child_builtin(command));
     } else {
         execute_external_command(command);
     }
@@ -27,7 +89,7 @@ static void execute_pipeline(const Pipeline *pipeline) {
     Command *command = pipeline->commands;
 
     if (pipeline->command_count == 1 && builtin_is_builtin(command->argv[0])) {
-        builtin_execute(command);
+        execute_parent_builtin(command);
         return;
     }
 
@@ -63,6 +125,10 @@ static void execute_pipeline(const Pipeline *pipeline) {
             if (!is_last) {
                 close(fd[0]);
                 close(fd[1]);
+            }
+
+            if (apply_redirections(command) == -1) {
+                _exit(1);
             }
 
             execute_child_command(command);

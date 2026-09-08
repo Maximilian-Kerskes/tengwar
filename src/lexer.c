@@ -69,7 +69,13 @@ size_t lexer_tokenize(char *LINE, Token *token_buf, size_t token_buf_size) {
             token++;
             break;
         case '>':
-            token->type = TK_REDIRECT_OUT;
+            if (c[1] == '>') {
+                token->type = TK_REDIRECT_APPEND;
+                c += 2;
+            } else {
+                token->type = TK_REDIRECT_OUT;
+                c++;
+            }
             token++;
             break;
         case '|':

@@ -32,13 +32,47 @@ void list_free(List *list) {
     free(list->pipelines);
 }
 
+static int parse_redirect(Parser *parser, Command *command, RedirectType type) {
+    parser->p_current++;
+
+    if (parser->p_current->type != TK_WORD) {
+        return -1;
+    }
+
+    char *filename = parser->p_current->value;
+    parser->p_current->value = NULL;
+    parser->p_current++;
+
+    ARRAY_PUSH(command->redirects, command->redirect_count, command->redirect_capacity,
+               ((Redirect){.type = type, .filename = filename}));
+    return 0;
+}
+
 static void parse_command(Parser *parser, Command *command) {
     *command = (Command){0};
 
-    while (parser->p_current->type == TK_WORD) {
-        ARRAY_PUSH(command->argv, command->argc, command->capacity, parser->p_current->value);
-        parser->p_current->value = NULL;
-        parser->p_current++;
+    while (parser->p_current->type == TK_WORD || parser->p_current->type == TK_REDIRECT_IN ||
+           parser->p_current->type == TK_REDIRECT_OUT ||
+           parser->p_current->type == TK_REDIRECT_APPEND) {
+        switch (parser->p_current->type) {
+        case TK_WORD:
+            ARRAY_PUSH(command->argv, command->argc, command->capacity, parser->p_current->value);
+            parser->p_current->value = NULL;
+            parser->p_current++;
+            break;
+
+        case TK_REDIRECT_IN:
+            parse_redirect(parser, command, REDIRECT_IN);
+            break;
+        case TK_REDIRECT_OUT:
+            parse_redirect(parser, command, REDIRECT_OUT);
+            break;
+        case TK_REDIRECT_APPEND:
+            parse_redirect(parser, command, REDIRECT_APPEND);
+            break;
+        default:
+            break;
+        }
     }
 
     /*

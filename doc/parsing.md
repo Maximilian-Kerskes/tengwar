@@ -8,4 +8,5 @@
 
 - list := pipeline (';' pipeline)\*
 - pipeline := command ('|' command)\*
-- command := WORD\*
+- command := ( WORD | redirection)\*
+- redirection := '<' WORD | '>' WORD | '>>' WORD
