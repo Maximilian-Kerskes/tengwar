@@ -1,5 +1,6 @@
 #include "tengwar/parser.h"
 #include "tengwar/lexer.h"
+#include <stdbool.h>
 #include <stdlib.h>
 
 #define ARRAY_PUSH(array, count, capacity, value)                                                  \
@@ -15,7 +16,13 @@ static void command_free(Command *command) {
     for (size_t i = 0; i < command->argc; i++) {
         free(command->argv[i]);
     }
+
+    for (size_t i = 0; i < command->redirect_count; i++) {
+        free(command->redirects[i].filename);
+    }
+    free(command->redirects);
     free(command->argv);
+    *command = (Command){0};
 }
 
 static void pipeline_free(Pipeline *pipeline) {
@@ -23,6 +30,7 @@ static void pipeline_free(Pipeline *pipeline) {
         command_free(&pipeline->commands[i]);
     }
     free(pipeline->commands);
+    *pipeline = (Pipeline){0};
 }
 
 void list_free(List *list) {
@@ -30,6 +38,7 @@ void list_free(List *list) {
         pipeline_free(&list->pipelines[i]);
     }
     free(list->pipelines);
+    *list = (List){0};
 }
 
 static int parse_redirect(Parser *parser, Command *command, RedirectType type) {
@@ -48,31 +57,48 @@ static int parse_redirect(Parser *parser, Command *command, RedirectType type) {
     return 0;
 }
 
-static void parse_command(Parser *parser, Command *command) {
+static int parse_command(Parser *parser, Command *command) {
     *command = (Command){0};
+
+    bool saw_word = false;
 
     while (parser->p_current->type == TK_WORD || parser->p_current->type == TK_REDIRECT_IN ||
            parser->p_current->type == TK_REDIRECT_OUT ||
            parser->p_current->type == TK_REDIRECT_APPEND) {
         switch (parser->p_current->type) {
         case TK_WORD:
+            saw_word = true;
             ARRAY_PUSH(command->argv, command->argc, command->capacity, parser->p_current->value);
             parser->p_current->value = NULL;
             parser->p_current++;
             break;
 
         case TK_REDIRECT_IN:
-            parse_redirect(parser, command, REDIRECT_IN);
+            if (parse_redirect(parser, command, REDIRECT_IN) != 0) {
+                command_free(command);
+                return -1;
+            }
             break;
         case TK_REDIRECT_OUT:
-            parse_redirect(parser, command, REDIRECT_OUT);
+            if (parse_redirect(parser, command, REDIRECT_OUT) != 0) {
+                command_free(command);
+                return -1;
+            }
             break;
         case TK_REDIRECT_APPEND:
-            parse_redirect(parser, command, REDIRECT_APPEND);
+            if (parse_redirect(parser, command, REDIRECT_APPEND) != 0) {
+                command_free(command);
+                return -1;
+            }
             break;
         default:
             break;
         }
+    }
+
+    if (!saw_word) {
+        command_free(command);
+        return -1;
     }
 
     /*
@@ -80,36 +106,60 @@ static void parse_command(Parser *parser, Command *command) {
      */
     ARRAY_PUSH(command->argv, command->argc, command->capacity, NULL);
     command->argc--;
+
+    return 0;
 }
 
-static void parse_pipeline(Parser *parser, Pipeline *pipeline) {
+static int parse_pipeline(Parser *parser, Pipeline *pipeline) {
     *pipeline = (Pipeline){0};
 
     Command command;
 
-    parse_command(parser, &command);
+    if (parse_command(parser, &command) != 0) {
+        pipeline_free(pipeline);
+        return -1;
+    };
+
     ARRAY_PUSH(pipeline->commands, pipeline->command_count, pipeline->capacity, command);
 
     while (parser->p_current->type == TK_PIPE) {
         parser->p_current++;
 
-        parse_command(parser, &command);
+        if (parse_command(parser, &command) != 0) {
+            pipeline_free(pipeline);
+            return -1;
+        }
         ARRAY_PUSH(pipeline->commands, pipeline->command_count, pipeline->capacity, command);
     }
+
+    return 0;
 }
 
-void parse_list(Parser *parser, List *list) {
+int parse_list(Parser *parser, List *list) {
     *list = (List){0};
+
+    if (parser->p_current->type == TK_NEWLINE || parser->p_current->type == TK_EOF) {
+        return 0;
+    }
 
     Pipeline pipeline;
 
-    parse_pipeline(parser, &pipeline);
+    if (parse_pipeline(parser, &pipeline) != 0) {
+        list_free(list);
+        return -1;
+    };
+
     ARRAY_PUSH(list->pipelines, list->pipeline_count, list->capacity, pipeline);
 
     while (parser->p_current->type == TK_SEMICOLON) {
         parser->p_current++;
 
-        parse_pipeline(parser, &pipeline);
+        if (parse_pipeline(parser, &pipeline) != 0) {
+            list_free(list);
+            return -1;
+        };
         ARRAY_PUSH(list->pipelines, list->pipeline_count, list->capacity, pipeline);
     }
+
+    return 0;
 }

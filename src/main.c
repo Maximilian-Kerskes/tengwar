@@ -29,7 +29,11 @@ int main(void) {
 
         List list;
 
-        parse_list(&parser, &list);
+        if (parse_list(&parser, &list) != 0) {
+            printf("error\n");
+			lexer_free_tokens(tokens, token_count);
+            continue;
+        };
 
         execute_list(&list);
 

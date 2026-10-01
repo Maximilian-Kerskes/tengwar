@@ -44,4 +44,4 @@ typedef struct Parser {
 
 void list_free(List *list);
 
-void parse_list(Parser *parser, List *list);
+int parse_list(Parser *parser, List *list);

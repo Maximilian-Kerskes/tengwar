@@ -157,6 +157,10 @@ static void execute_pipeline(const Pipeline *pipeline) {
 void execute_list(const List *list) {
     const Pipeline *pipeline = list->pipelines;
 
+    if (list->pipeline_count == 0) {
+        return;
+    }
+
     while (pipeline < list->pipelines + list->pipeline_count) {
         execute_pipeline(pipeline);
         pipeline++;
